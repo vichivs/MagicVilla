@@ -1,10 +1,9 @@
-﻿using MagicVilla_VillaAPI.Data;
-using MagicVilla_VillaAPI.Logging;
-using MagicVilla_VillaAPI.Models;
+﻿using MagicVilla_VillaAPI.Logging;
 using MagicVilla_VillaAPI.Models.Dto;
+using MagicVilla_VillaAPI.Repositories;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
 
 namespace MagicVilla_VillaAPI.Controllers
 {
@@ -12,12 +11,13 @@ namespace MagicVilla_VillaAPI.Controllers
     [ApiController]
     public class VillaAPIController : ControllerBase
     {
-        private readonly ApplicationDbContext _db;
+        private readonly IVillaRepository _villaRepository;
         private readonly ILogging _logger;
-        public VillaAPIController(ILogging logger, ApplicationDbContext db)
+
+        public VillaAPIController(ILogging logger, IVillaRepository villaRepository)
         {
             _logger = logger;
-            _db = db;
+            _villaRepository = villaRepository;
         }
 
         [HttpGet("GetAllVilla")]
@@ -25,22 +25,22 @@ namespace MagicVilla_VillaAPI.Controllers
         public ActionResult<IEnumerable<VillaDto>> GetVillas()
         {
             _logger.Log("Getting all villas", "");
-            return Ok(_db.Villas.ToList());
+            return Ok(_villaRepository.GetAllVillas());
         }
 
-        [HttpGet("GetVillaById/{id:int}", Name ="GetVillaById")]
+        [HttpGet("GetVillaById/{id:int}", Name = "GetVillaById")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public ActionResult<VillaDto> GetVillaById(int id)
         {
-            if(id == 0)
+            if (id == 0)
             {
                 _logger.Log("Error finding villa with Id: " + id, "error");
                 return BadRequest();
             }
 
-            var villa = _db.Villas.FirstOrDefault(u => u.Id.Equals(id));
+            var villa = _villaRepository.GetVillaById(id);
 
             if (villa == null)
             {
@@ -61,38 +61,18 @@ namespace MagicVilla_VillaAPI.Controllers
                 return BadRequest(villaDtos);
             }
 
-            var existingVillaNames = _db.Villas.Select(v => v.Name.ToLower()).ToList();
+            var villaNames = villaDtos.Select(v => v.Name);
+            var existingVillas = _villaRepository.GetVillasByName(villaNames);
 
+            var existingVillaNames = existingVillas.Select(v => v.Name.ToLower()).ToList();
             var villasToCreate = villaDtos.Where(v => !existingVillaNames.Contains(v.Name.ToLower()));
-            var existingVillas = villaDtos.Where(v => existingVillaNames.Contains(v.Name.ToLower()));
 
-            foreach (var villaDto in villasToCreate)
-            {
-                if (villaDto.Id > 0)
-                {
-                    return StatusCode(StatusCodes.Status500InternalServerError);
-                }
-            }
-
-            var models = villasToCreate.Select(villaDto => new Villa
-            {
-                Amenity = villaDto.Amenity,
-                Details = villaDto.Details,
-                ImageUrl = villaDto.ImageUrl,
-                Name = villaDto.Name,
-                Occupancy = villaDto.Occupancy,
-                Rate = villaDto.Rate,
-                Sqft = villaDto.Sqft,
-                CreatedDate = DateTime.Now,
-                UpdateDate = DateTime.Now
-            });
-
-            _db.Villas.AddRange(models);
-            _db.SaveChanges();
+            _villaRepository.CreateVillas(villasToCreate);
+            _villaRepository.SaveChanges();
 
             var response = new
             {
-                CreatedVillas = villasToCreate,
+                CreatedVillas = villasToCreate.Select(v => new { v.Name, Message = "Villa successfully created" }),
                 ExistingVillas = existingVillas.Select(v => new { v.Name, Message = "Villa already exists" })
             };
 
@@ -106,18 +86,18 @@ namespace MagicVilla_VillaAPI.Controllers
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public IActionResult DeleteVilla(int id)
         {
-            if(id == 0)
+            if (id == 0)
             {
                 return BadRequest();
             }
 
-            var villa = _db.Villas.FirstOrDefault(u => u.Id.Equals(id));
-            if(villa == null)
+            if (!_villaRepository.VillaExists(id))
             {
                 return NotFound();
             }
-            _db.Villas.Remove(villa);
-            _db.SaveChanges();
+
+            _villaRepository.DeleteVilla(id);
+            _villaRepository.SaveChanges();
 
             return NoContent();
         }
@@ -133,33 +113,16 @@ namespace MagicVilla_VillaAPI.Controllers
                 return BadRequest();
             }
 
-            var existingVilla = _db.Villas.AsNoTracking().FirstOrDefault(u => u.Id == villaDto.Id);
-            if (existingVilla == null)
+            if (!_villaRepository.VillaExists(villaDto.Id))
             {
                 return NotFound();
             }
 
-            Villa updatedModel = new()
-            {
-                Id = villaDto.Id,
-                Name = villaDto.Name,
-                Details = villaDto.Details,
-                Amenity = villaDto.Amenity,
-                ImageUrl = villaDto.ImageUrl,
-                Occupancy = villaDto.Occupancy,
-                Rate = villaDto.Rate,
-                Sqft = villaDto.Sqft,
-                CreatedDate = existingVilla.CreatedDate, 
-                UpdateDate = DateTime.Now 
-            };
-
-            _db.Villas.Update(updatedModel);
-            _db.SaveChanges();
+            _villaRepository.UpdateVilla(villaDto);
+            _villaRepository.SaveChanges();
 
             return NoContent();
         }
-
-
 
         [HttpPatch("UpdatePartialVilla/{id:int}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -172,51 +135,15 @@ namespace MagicVilla_VillaAPI.Controllers
                 return BadRequest();
             }
 
-            var existingVilla = _db.Villas.AsNoTracking().FirstOrDefault(u => u.Id == id);
-            if (existingVilla == null)
+            if (!_villaRepository.VillaExists(id))
             {
                 return NotFound();
             }
 
-            VillaDto villaDto = new()
-            {
-                Id = existingVilla.Id,
-                Name = existingVilla.Name,
-                Details = existingVilla.Details,
-                Amenity = existingVilla.Amenity,
-                ImageUrl = existingVilla.ImageUrl,
-                Occupancy = existingVilla.Occupancy,
-                Rate = existingVilla.Rate,
-                Sqft = existingVilla.Sqft,
-                UpdateDate = DateTime.Now 
-            };
-
-            patchDto.ApplyTo(villaDto, ModelState);
-
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            Villa updatedModel = new()
-            {
-                Id = villaDto.Id,
-                Name = villaDto.Name,
-                Details = villaDto.Details,
-                Amenity = villaDto.Amenity,
-                ImageUrl = villaDto.ImageUrl,
-                Occupancy = villaDto.Occupancy,
-                Rate = villaDto.Rate,
-                Sqft = villaDto.Sqft,
-                CreatedDate = existingVilla.CreatedDate, 
-                UpdateDate = DateTime.Now 
-            };
-
-            _db.Villas.Update(updatedModel);
-            _db.SaveChanges();
+            _villaRepository.UpdatePartialVilla(id, patchDto);
+            _villaRepository.SaveChanges();
 
             return NoContent();
         }
-
     }
 }
