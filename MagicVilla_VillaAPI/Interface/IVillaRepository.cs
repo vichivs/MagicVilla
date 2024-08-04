@@ -7,14 +7,14 @@ namespace MagicVilla_VillaAPI.Repositories
 {
     public interface IVillaRepository
     {
-        IEnumerable<Villa> GetAllVillas();
-        Villa GetVillaById(int id);
-        List<Villa> GetVillasByName(IEnumerable<string> villaNames);
-        void CreateVillas(IEnumerable<VillaDto> villaDtos);
-        void DeleteVilla(int id);
-        void UpdateVilla(VillaDto villaDto);
-        void UpdatePartialVilla(int id, JsonPatchDocument<VillaDto> patchDto);
-        bool VillaExists(int id);
-        bool SaveChanges();
+        Task<IEnumerable<Villa>> GetAllVillasAsync();
+        Task<Villa> GetVillaByIdAsync(int id);
+        Task<List<Villa>> GetVillasByNameAsync(IEnumerable<string> villaNames);
+        Task CreateVillasAsync(IEnumerable<VillaDto> villaDtos);
+        Task DeleteVillaAsync(int id);
+        Task UpdateVillaAsync(VillaDto villaDto);
+        Task UpdatePartialVillaAsync(int id, JsonPatchDocument<VillaDto> patchDto);
+        Task<bool> VillaExistsAsync(int id);
+        Task<bool> SaveChangesAsync();
     }
 }

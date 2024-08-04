@@ -17,19 +17,19 @@ namespace MagicVilla_VillaAPI.Repositories
             _db = db;
         }
 
-        public IEnumerable<Villa> GetAllVillas()
+        public async Task<IEnumerable<Villa>> GetAllVillasAsync()
         {
-            return _db.Villas.ToList();
+            return await _db.Villas.ToListAsync();
         }
 
-        public Villa GetVillaById(int id)
+        public async Task<Villa> GetVillaByIdAsync(int id)
         {
-            return _db.Villas.FirstOrDefault(u => u.Id == id);
+            return await _db.Villas.FirstOrDefaultAsync(u => u.Id == id);
         }
 
-        public void CreateVillas(IEnumerable<VillaDto> villaDtos)
+        public async Task CreateVillasAsync(IEnumerable<VillaDto> villaDtos)
         {
-            var existingVillaNames = _db.Villas.Select(v => v.Name.ToLower()).ToList();
+            var existingVillaNames = await _db.Villas.Select(v => v.Name.ToLower()).ToListAsync();
             var villasToCreate = villaDtos.Where(v => !existingVillaNames.Contains(v.Name.ToLower()));
 
             var models = villasToCreate.Select(villaDto => new Villa
@@ -45,19 +45,19 @@ namespace MagicVilla_VillaAPI.Repositories
                 UpdateDate = DateTime.Now
             });
 
-            _db.Villas.AddRange(models);
+            await _db.Villas.AddRangeAsync(models);
         }
 
-        public void DeleteVilla(int id)
+        public async Task DeleteVillaAsync(int id)
         {
-            var villa = _db.Villas.FirstOrDefault(u => u.Id == id);
+            var villa = await _db.Villas.FirstOrDefaultAsync(u => u.Id == id);
             if (villa != null)
             {
                 _db.Villas.Remove(villa);
             }
         }
 
-        public void UpdateVilla(VillaDto villaDto)
+        public async Task UpdateVillaAsync(VillaDto villaDto)
         {
             Villa updatedModel = new()
             {
@@ -76,9 +76,9 @@ namespace MagicVilla_VillaAPI.Repositories
             _db.Villas.Update(updatedModel);
         }
 
-        public void UpdatePartialVilla(int id, JsonPatchDocument<VillaDto> patchDto)
+        public async Task UpdatePartialVillaAsync(int id, JsonPatchDocument<VillaDto> patchDto)
         {
-            var existingVilla = _db.Villas.AsNoTracking().FirstOrDefault(u => u.Id == id);
+            var existingVilla = await _db.Villas.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
             if (existingVilla == null)
             {
                 return;
@@ -116,20 +116,21 @@ namespace MagicVilla_VillaAPI.Repositories
             _db.Villas.Update(updatedModel);
         }
 
-        public bool VillaExists(int id)
+        public async Task<bool> VillaExistsAsync(int id)
         {
-            return _db.Villas.Any(e => e.Id == id);
+            return await _db.Villas.AnyAsync(e => e.Id == id);
         }
 
-        public bool SaveChanges()
+        public async Task<bool> SaveChangesAsync()
         {
-            return _db.SaveChanges() >= 0;
+            return await _db.SaveChangesAsync() >= 0;
         }
 
-        public List<Villa> GetVillasByName(IEnumerable<string> villaNames)
+        public async Task<List<Villa>> GetVillasByNameAsync(IEnumerable<string> villaNames)
         {
             var lowerNames = villaNames.Select(name => name.ToLower()).ToList();
-            return _db.Villas.Where(v => lowerNames.Contains(v.Name.ToLower())).ToList();
+            return await _db.Villas.Where(v => lowerNames.Contains(v.Name.ToLower())).ToListAsync();
         }
+
     }
 }
